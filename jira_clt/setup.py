@@ -4,7 +4,7 @@ from setuptools import find_packages
 setup(
     name='jira_clt',
     author='Linaro.org',
-    author_email='linaro@linaro.org',
+    author_email='amro.hassaan@linaro.org',
     version='1.1',
     description="Linaro JIRA Command line tools",
     entry_points={
