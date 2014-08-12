@@ -1,6 +1,6 @@
 ##@package jira_clt
 #
-#Package for all jira command line tools.
+#Package for all jira command line tools
 
 import threading
 import time

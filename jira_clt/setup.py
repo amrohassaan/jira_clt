@@ -11,7 +11,8 @@ setup(
         'console_scripts': [
             'efforts=jira_clt.efforts:main']
     },
-    install_requires=['jira-python==0.16', 'oauth2==1.5.211', 'pycrypto==2.6.1',
+    install_requires=['jira-python==0.16',
+                      'oauth2==1.5.211', 'pycrypto==2.6.1',
                       'workdays==1.3'],
     packages=find_packages(),
     include_package_data=True
