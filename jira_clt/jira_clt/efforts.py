@@ -1,6 +1,6 @@
 ##@package jira_clt
 #
-# Jira clt tool to extract efforts and write them to a file
+# Jira clt tool to extract efforts and write them to a file.
 
 import argparse
 from jira_clt import jira_clt_efforts
