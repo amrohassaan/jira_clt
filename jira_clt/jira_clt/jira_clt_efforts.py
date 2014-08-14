@@ -103,8 +103,7 @@ class JiraEffortsCLT(JcltBase):
 
     def _get_issue_hierarchy(self, issues):
         non_orphans = []
-        for issue in issues:
-            #issue = JiraEffortsCLT.jira.issue('CARD-1022')
+        for issue in issues:            
             if issue.fields.issuetype.subtask:
                 parent = JiraEffortsCLT.jira.issue(issue.fields.parent.id)
                 parent = self._get_issue_parent(parent)
@@ -172,7 +171,7 @@ class JiraEffortsCLT(JcltBase):
                     and hasattr(link, 'outwardIssue')\
                     and link.outwardIssue.fields.issuetype.name.lower() != 'new feature')
                         , None)
-            if link:#hasattr(link, 'outwardIssue'):
+            if link:
                 return JiraEffortsCLT.jira.issue(link.outwardIssue.id)
         #customfield_10301 is the EpicLink field
         if blueprint.fields.customfield_10301:
