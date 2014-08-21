@@ -2,31 +2,33 @@
 #
 # Jira clt tool to extract efforts and write them to a file.
 
+import sys
 import argparse
+import logging
+import jira_clt.logger
 from jira_clt import jira_clt_efforts
-#TODO: import logger
 
 
 def main():
     '''Entry point for efforts.
     '''
-    parser = argparse.ArgumentParser(description=jira_clt_efforts.JiraEffortsCLT.usage_description)
+    parser = argparse.ArgumentParser(description=jira_clt_efforts.JiraEffortsCLT.usage_description,
+                                     formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', '--verbose', action='store_true',
                         dest='verbose', default=False,
-                        help='Turn verbosity on')
+                        help='Turn verbosity on for debugging.')
 
     jira_clt_efforts.JiraEffortsCLT(parser)
-    arguments = parser.parse_args()
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
 
+    arguments = parser.parse_args()
+    jira_clt.logger.enable_console_logging(logging.WARN)
     if arguments.verbose:
-        #TODO: turn debugging level on logger
-        pass
-    else:
-        #TODO: set logging level on console to info
-        pass
+        jira_clt.logger.set_console_level(logging.DEBUG)
 
     arguments.func(arguments)
-
 
 if __name__ == '__main__':
     main()
