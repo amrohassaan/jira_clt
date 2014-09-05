@@ -5,7 +5,7 @@
 from __future__ import division
 from __future__ import print_function
 from jira_clt.jira_clt_base import JcltBase
-from jira_clt import AutoVivification, ProgressBarDotPrinter
+from jira_clt import AutoVivification
 from getpass import getpass
 from workdays import networkdays
 from configobj import ConfigObj
@@ -19,7 +19,7 @@ import calendar
 import csv
 import re
 import subprocess
-#automate advancing date by one day for provided user arg end date
+
 try:
     from jira.client import JIRA
     from jira.exceptions import JIRAError
@@ -98,7 +98,7 @@ def getlastday(year, month, daytofind):
 FRIDAY_AFTER_RELEASE = getlastday(dt.datetime.today().year,
                                   dt.datetime.today().month,
                                   calendar.FRIDAY)
-NEXT_RELEASE_MONTH = FRIDAY_AFTER_RELEASE + relativedelta(months=1)
+NEXT_RELEASE_MONTH = FRIDAY_AFTER_RELEASE + relativedelta(months=+1)
 NEXT_RELEASE_DATE = getlastday(NEXT_RELEASE_MONTH.year,
                                NEXT_RELEASE_MONTH.month,
                                calendar.THURSDAY)
@@ -122,15 +122,35 @@ class JiraEffortsCLTException(Exception):
 class JiraEffortsCLT(JcltBase):
     '''Extracts efforts from JIRA for an arbitrary time span.
     '''
-    usage_description = "Extracts time spent per engineer on issues over arbitrary period of time\n\n" +\
-                        "Example-1 (collect efforts for all components from start to end date):\n"+\
+    usage_description = "Extracts time spent per engineer on issues over arbitrary period of time.\n\n" +\
+                        "=============================================================================================\n" +\
+                        "||+ 'efforts' accepts command line arg and values from config file '~/.effortsrc'.         ||\n"+\
+                        "||+ Command line args override config file values.                                         ||\n"+\
+                        "||+ On first run, it creates the config file in user homedir and opens it to user          ||\n"+\
+                        "||   to fill it.                                                                           ||\n"+\
+                        "||+ Config has 'DEFAULT' section which extracts efforts for all components. And a section  ||\n"+\
+                        "||   for each component.                                                                   ||\n"+\
+                        "||+ Release cycle dates are autopopulated in the config 'DEFAULT' section. If interested   ||\n"+\
+                        "||   in extracting individual components, user has to specify component dates ONLY.        ||\n"+\
+                        "||   Other components arguments (server..etc) map to 'DEFAULT' section unless              ||\n"+\
+                        "||   user input other values for those arguments in components section.                    ||\n"+\
+                        "=============================================================================================\n"+\
+                        "Example-1 (collect efforts for all components from start to end date using config file default values):\n"+\
+                        "\t efforts \n\n" +\
+                        "Example-2 (collect efforts for 'LAVA' components only using config LAVA section):\n"+\
+                        "\t efforts -m lava\n\n" +\
+                        "Example-3 (collect efforts for 'LAVA' and 'QA' components. If no command line dates args,\n"+\
+                        "          it will use 'DEFAULT' section args. Extracting efforts for multiple components\n"+\
+                        "          will NOT use config component sections) :\n"+\
+                        "\t efforts -m lava,qa \n\n" +\
+                        "Example-4 (collect efforts for all components from start to end date (args override config)):\n"+\
                         "\t efforts -j 'https://cards.linaro.org' -s 2014.6.1 -e 2014.6.21\n\n" +\
-                        "Example-2 (collect efforts ONLY for LAB component from start to end date):\n "+\
-                        "\t effort -j 'https://cards.linaro.org' -s 2014.6.1 -e 2014.7.1 -c lab\n\n"+\
-                        "Example-3 (collect efforts for multiple comma-separated components from start to end date):\n"+\
-                        "\t effort -j 'https://cards.linaro.org' -s 2014.6.1 -e 2014.7.1 -c lab,sys,lava,lng\n\n"+\
-                        "Example-4 (collect efforts for current month):\n"+\
-                        "\t effort -j 'https://cards.linaro.org'"    
+                        "Example-5 (collect efforts ONLY for LAB component from start to end date (args override config)):\n "+\
+                        "\t effort -j 'https://cards.linaro.org' -s 2014.6.1 -e 2014.7.1 -m lab\n\n"+\
+                        "Example-6 (collect efforts for multiple comma-separated components from start to end date (args override config)):\n"+\
+                        "\t effort -j 'https://cards.linaro.org' -s 2014.6.1 -e 2014.7.1 -m lab,sys,lava,lng\n\n"+\
+                        "Example-7 (opens config for editing):\n"+\
+                        "\t effort config"
     jiraserver = None
     password = None
     username = None
@@ -180,8 +200,8 @@ class JiraEffortsCLT(JcltBase):
         parser.add_argument('-m', '--component', action='store', dest='components',
                             type=self._parse_components,
                             help="Collect efforts for a specific single or comma-separated list of component(s).\n"
-                            "Valid components arguments are listed below and are\n"
-                            "case insensitive for both long and short versions:\n"
+                            "Valid components arguments are listed below. ONLY short version is accepted.\n"
+                            "short version is case insensitive. e.g. LNG or lng:\n"
                             + COMPONENTS_HELP)
         parser.add_argument('-u', '--username', dest='username', help='Jira username')
 
@@ -194,20 +214,15 @@ class JiraEffortsCLT(JcltBase):
             components_short.add(v.lower())
 
         for component in string_components.split(','):
-            if component.title() not in components_long and\
-            component.lower() not in components_short:
+            if component.lower() not in components_short:
                 print ("Component(s) argument not valid!")
                 print ("Type 'efforts' or 'efforts -h' for help on valid component names!\n")
                 exit(1)
             else:
-                if component.title() in components_long:
-                    components_list.append(component.title())
-                else:
-                    for k in COMPONENTS.keys():
-                        if COMPONENTS[k].lower() == component.lower():
-                            components_list.append(k)
-                            break
-
+                for k in COMPONENTS.keys():
+                    if COMPONENTS[k].lower() == component.lower():
+                        components_list.append(k)
+                        break
         return components_list
 
     def _check_date_string(self, string_date):
@@ -358,7 +373,7 @@ class JiraEffortsCLT(JcltBase):
 
     def error_exit(self, argument, option):
         print(MISSING_ARG_ERROR % (argument, option))
-        exit(1)    
+        exit(1)
 
     def run(self, arguments):
         '''Overrides base class's run'''
@@ -419,8 +434,11 @@ class JiraEffortsCLT(JcltBase):
 
         start_date_obj = dt.datetime.strptime(self.start_date,
                                                   '%Y/%m/%d').date()
+        #advance end day by one day to inculde end day in jql search
         end_date_obj = dt.datetime.strptime(self.end_date,
-                                                '%Y/%m/%d').date()
+                                                '%Y/%m/%d').date() + \
+                                                  relativedelta(days=+1)
+        self.end_date = end_date_obj.strftime('%Y/%m/%d')
         if start_date_obj >= end_date_obj:
             print ("start date cannot be equal to or small than end date!")
             exit(1)
@@ -455,7 +473,7 @@ class JiraEffortsCLT(JcltBase):
             issues = set(JiraEffortsCLT.jira.search_issues(worklogs_jql,
                                                            maxResults=500))
             if len(issues) == 0:
-                print ("Didn't find any any work logs for this period/given component...exiting!")
+                print ("Didn't find any any work logs for this period/given component!")
                 exit(0)
 
             for issue in issues:
@@ -464,7 +482,7 @@ class JiraEffortsCLT(JcltBase):
 
             issues -= self.pmo
             issue_parents_list = self._get_issue_hierarchy(issues)
-            if not set(self.components) & self.retrieved_components:
+            if self.components and not set(self.components) & self.retrieved_components:
                 print("Found no worklogs for specified components in this period!")
                 exit(1)
 
@@ -525,4 +543,4 @@ def open_config_for_editing():
         if sys.platform == 'linux' or sys.platform == 'linux2' or sys.platform == 'darwin':
                 cmd = os.environ.get('EDITOR', 'vi') + " " + CONFIG_FILE
                 #TODO: add elif for windows
-        subprocess.check_call(cmd, shell=True)
+        subprocess.call(cmd, shell=True)
