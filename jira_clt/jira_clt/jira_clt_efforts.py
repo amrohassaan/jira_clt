@@ -8,46 +8,52 @@ from jira_clt.jira_clt_base import JcltBase
 from jira_clt import AutoVivification, ProgressBarDotPrinter
 from getpass import getpass
 from workdays import networkdays
+from configobj import ConfigObj
+from collections import OrderedDict
+from dateutil.relativedelta import relativedelta
 import logging
 import sys
 import os
 import datetime as dt
+import calendar
 import csv
 import re
-
+import subprocess
+#automate advancing date by one day for provided user arg end date
 try:
     from jira.client import JIRA
+    from jira.exceptions import JIRAError
 except:
     print ('jira-python not installed')
     sys.exit('1')
 
-NEXT_MONTH = dt.datetime.now().date().month + 1
-COMPONENTS = {"Android":"andr",
-              "Android Engineering":"ae",
-              "ARMLT":None,
-              "Broadcom LT":"blt",
-              "Builds and Baselines":"bb",
-              "Fujitsu LT":"flt",
-              "Graphics WG":"gwg",
-              "Hisilicon LT":"hlt",
-              "Kernel WG":"kwg",
-              "LAB":None,
-              "LAVA":None,
-              "LEG - Linaro Enterprise Group":"leg",
-              "LHG - Linaro Home Group":"lhg",
-              "LMG - Linaro Mobile Group":"lmg",
-              "LNG - Linaro Networking Group":"lng",
-              "LSK":None,
-              "OCTO":None,
-              "Power Management WG":"pmwg",
-              "QA Services":"qa",
-              "Qualcomm LT":"qlt",
-              "Security WG":"swg",
-              "ST LT":"stlt",
-              "Systems":"sys",
-              "Toolchain WG":"tcwg",
-              "Virtualisation":"virt"}
 
+NEXT_MONTH = dt.datetime.now().date().month + 1
+COMPONENTS = {'Android': 'andr',
+              'Android Engineering': 'ae',
+              'ARMLT': 'armlt',
+              'Broadcom LT': 'blt',
+              'Builds and Baselines': 'bb',
+              'Fujitsu LT': 'flt',
+              'Graphics WG': 'gwg',
+              'Hisilicon LT': 'hlt',
+              'Kernel WG': 'kwg',
+              'LAB': 'lab',
+              'LAVA': 'lava',
+              'LEG - Linaro Enterprise Group': 'leg',
+              'LHG - Linaro Home Group': 'lhg',
+              'LMG - Linaro Mobile Group': 'lmg',
+              'LNG - Linaro Networking Group': 'lng',
+              'LSK': 'lsk',
+              'OCTO': 'octo',
+              'Power Management WG': 'pmwg',
+              'QA Services': 'qa',
+              'Qualcomm LT': 'qlt',
+              'Security WG': 'swg',
+              'ST LT': 'stlt',
+              'Systems': 'sys',
+              'Toolchain WG': 'tcwg',
+              'Virtualisation': 'virt'}
 COMPONENTS_HELP = "\n".join(["================================================",
                              "||'QA Services'                   ||OR|| qa   ||",
                              "||'Virtualisation'                ||OR|| virt ||",
@@ -75,6 +81,38 @@ COMPONENTS_HELP = "\n".join(["================================================",
                              "||'ST LT'                         ||OR|| stlt ||",
                              "||'Systems'                       ||OR|| sys  ||",
                              "================================================"])
+MISSING_ARG_ERROR = ''.join(['Missing %s! Please add to config or provide \n',
+                             'on command line with "%s" option'])
+
+
+def getlastday(year, month, daytofind):
+    monthrange = calendar.monthrange(year, month)
+    lastday = monthrange[1]
+    while True:
+        current_day = calendar.weekday(year, month, lastday)
+        if current_day != daytofind:
+            lastday -= 1
+        else:
+            return dt.date(year, month, lastday)
+
+FRIDAY_AFTER_RELEASE = getlastday(dt.datetime.today().year,
+                                  dt.datetime.today().month,
+                                  calendar.FRIDAY)
+NEXT_RELEASE_MONTH = FRIDAY_AFTER_RELEASE + relativedelta(months=1)
+NEXT_RELEASE_DATE = getlastday(NEXT_RELEASE_MONTH.year,
+                               NEXT_RELEASE_MONTH.month,
+                               calendar.THURSDAY)
+CONFIG_FILE = os.path.expanduser('~') + '/.effortsrc'
+CONF_INITIALIZER = OrderedDict([('DEFAULT',
+                                 OrderedDict([('jira-server',
+                                               'https://cards.linaro.org'),
+                                              ('username', 'amro'),
+                                              ('password', 'pass'),
+                                              ('start-date', FRIDAY_AFTER_RELEASE.strftime('%Y/%m/%d')),
+                                              ('end-date', NEXT_RELEASE_DATE.strftime('%Y/%m/%d'))
+                                              ])
+                                 )]
+                               )
 
 
 class JiraEffortsCLTException(Exception):
@@ -92,9 +130,7 @@ class JiraEffortsCLT(JcltBase):
                         "Example-3 (collect efforts for multiple comma-separated components from start to end date):\n"+\
                         "\t effort -j 'https://cards.linaro.org' -s 2014.6.1 -e 2014.7.1 -c lab,sys,lava,lng\n\n"+\
                         "Example-4 (collect efforts for current month):\n"+\
-                        "\t effort -j 'https://cards.linaro.org'"
-
-    dot_interval = 5
+                        "\t effort -j 'https://cards.linaro.org'"    
     jiraserver = None
     password = None
     username = None
@@ -102,9 +138,31 @@ class JiraEffortsCLT(JcltBase):
 
     def __init__(self, parser):
         super(JiraEffortsCLT, self).__init__(parser)
+        if len(sys.argv) > 1 and sys.argv[1].lower() == "config":
+            if os.path.isfile(CONFIG_FILE):
+                open_config_for_editing()
+                exit(0)
+        if not os.path.isfile(CONFIG_FILE):
+            self.config = ConfigObj(CONF_INITIALIZER, write_empty_values=True)
+            for value in COMPONENTS.itervalues():
+                self.config[value] = OrderedDict([('server', '%(jira-server)s'),
+                                                  ('user', '%(username)s'),
+                                                  ('pass', '%(password)s'),
+                                                  ('start', ''),
+                                                  ('end', '')])
+
+            self.config.filename = CONFIG_FILE
+            self.config.initial_comment.append('To use this config please fill in all '
+                                               'the arguments under the default section')
+            self.config.initial_comment.append('Also fill in the start and end dates'
+                                               'for the component(s) you want to extract efforts for')
+            self.config.write()
+            open_config_for_editing()        
+        self.config = ConfigObj(CONFIG_FILE)
         self.logger = logging.getLogger('jira_clt.efforts')
         self.orphan_issues = set()
         self.pmo = set()
+        self.retrieved_components = set()
         self.efforts_dict = AutoVivification()
         self.start_date = str(dt.datetime.now().replace(day=1).date()).replace('-', '/')
         self.end_date = str(dt.datetime.now().replace(month=NEXT_MONTH,
@@ -119,7 +177,7 @@ class JiraEffortsCLT(JcltBase):
         parser.add_argument('-e', '--end', action='store', dest='end_date',
                             type=self._check_date_string, nargs=1,
                             help='Time period end date "Boundary end"')
-        parser.add_argument('-c', '--component', action='store', dest='components',
+        parser.add_argument('-m', '--component', action='store', dest='components',
                             type=self._parse_components,
                             help="Collect efforts for a specific single or comma-separated list of component(s).\n"
                             "Valid components arguments are listed below and are\n"
@@ -131,26 +189,23 @@ class JiraEffortsCLT(JcltBase):
         components_list = []
         components_long = set()
         components_short = set()
-
         for k, v in COMPONENTS.iteritems():
-            components_long.add(k.lower())
-            if v:
-                components_short.add(v.lower())
+            components_long.add(k)
+            components_short.add(v.lower())
 
         for component in string_components.split(','):
-            if component.lower() not in components_long and\
+            if component.title() not in components_long and\
             component.lower() not in components_short:
                 print ("Component(s) argument not valid!")
                 print ("Type 'efforts' or 'efforts -h' for help on valid component names!\n")
                 exit(1)
             else:
-                if component.lower() in components_long:
-                    components_list.append(component.lower())
+                if component.title() in components_long:
+                    components_list.append(component.title())
                 else:
                     for k in COMPONENTS.keys():
-                        if COMPONENTS[k] is not None and \
-                        COMPONENTS[k].lower() == component.lower():
-                            components_list.append(k.lower())
+                        if COMPONENTS[k].lower() == component.lower():
+                            components_list.append(k)
                             break
 
         return components_list
@@ -165,25 +220,19 @@ class JiraEffortsCLT(JcltBase):
 
     def _write_to_csv_file(self):
         issue_url = JiraEffortsCLT.jiraserver + "/browse/"
-        home_dir = os.path.expanduser("~")
-        efforts_period = re.sub('[.-/]', '-',
-                                self.start_date + "_to_" + self.end_date)
-        csv_filename = os.path.join(home_dir,
-                                    '%s-time-sheet.csv' % efforts_period)
-        with open(csv_filename, 'wb') as timesheet_file:
-            headers_list = ['EPIC', 'CARD', 'ENGINEER', 'EFFORTS PER CYCLE',
-                            'COMPONENT(S)', None, 'GO TO ISSUE']
-            timesheet_writer = csv.writer(timesheet_file, delimiter=',')
-            timesheet_writer.writerow(headers_list)
-            for k, v in self.efforts_dict.iteritems():
-                timesheet_writer.writerow([k[0], k[1], k[2], v['timespent'],
-                                           v['components'], None,
-                                           issue_url + k[1]])
-            if self.orphan_issues:
-                timesheet_writer.writerow(['Orphan issues'])
-                for item in self.orphan_issues:
-                    timesheet_writer.writerow([item, None, None, None, None,
-                                               issue_url + item])
+        headers_list = ['EPIC', 'CARD', 'ENGINEER', 'EFFORTS PER CYCLE',
+                        'COMPONENT(S)', None, 'GO TO ISSUE']
+        timesheet_writer = csv.writer(sys.stdout, delimiter='\t')
+        timesheet_writer.writerow(headers_list)
+        for k, v in self.efforts_dict.iteritems():
+            timesheet_writer.writerow([k[0], k[1], k[2], v['timespent'],
+                                       v['components'], None,
+                                       issue_url + k[1]])
+        if self.orphan_issues:
+            timesheet_writer.writerow(['Orphan issues'])
+            for item in self.orphan_issues:
+                timesheet_writer.writerow([item, None, None, None, None,
+                                           None, issue_url + item])
 
     def _get_arbitrary_dates_only(self, worklog):
         time_portion_idx = worklog.started.index('T')
@@ -200,9 +249,11 @@ class JiraEffortsCLT(JcltBase):
 
     def _get_issue_hierarchy(self, issues):
         non_orphans = []
+
         for issue in issues:
             if not issue.fields.assignee:
-                self.logger.debug("issue %s has no assignee. Skipping work logs from this issue" % issue.key)
+                self.logger.debug("issue %s has no assignee. "
+                                  "Skipping work logs from this issue" % issue.key)
                 self.orphan_issues.add(issue.key)
                 continue
 
@@ -279,25 +330,20 @@ class JiraEffortsCLT(JcltBase):
         if len(rmc.fields.components) > 0:
             for component in rmc.fields.components:
                 rmc_components.append(component.name)
+                self.retrieved_components.add(component.name)
 
             return rmc_components
         else:
             return None
 
-    def _get_duration_of_workingdays(self, start, end):
-        start_date = dt.datetime.strptime(start, '%Y/%m/%d').date()
-        end_date = dt.datetime.strptime(end, '%Y/%m/%d').date()
-        workingdays = networkdays(start_date, end_date) - 1
-
-        return workingdays * 8 * 60 * 60
-
     def _get_issue_parent(self, blueprint):
+
         if blueprint.fields.issuelinks:
             link = next((link for link in blueprint.fields.issuelinks\
-                    if link.type.name.lower() == 'implements'\
-                    and hasattr(link, 'outwardIssue')\
-                    and link.outwardIssue.fields.issuetype.name.lower() != 'new feature')
-                        , None)
+                     if link.type.name.lower() == 'implements'\
+                     and hasattr(link, 'outwardIssue')\
+                     and link.outwardIssue.fields.issuetype.name.lower() != 'new feature')
+                         , None)
             if link:
                 return JiraEffortsCLT.jira.issue(link.outwardIssue.id)
         #customfield_10301 is the EpicLink field
@@ -310,42 +356,102 @@ class JiraEffortsCLT(JcltBase):
         if JiraEffortsCLT.console_handler:
             JiraEffortsCLT.console_handler.setLevel(log_level)
 
+    def error_exit(self, argument, option):
+        print(MISSING_ARG_ERROR % (argument, option))
+        exit(1)    
+
     def run(self, arguments):
         '''Overrides base class's run'''
 
-        if arguments.jiraserver:
-            JiraEffortsCLT.jiraserver = arguments.jiraserver
-            #TODO: add check to config value for jira server as well.
-
-        if arguments.start_date and arguments.end_date:
-            self.start_date = arguments.start_date[0]
-            self.end_date = arguments.end_date[0]
-
-        secs_in_time_period = self._get_duration_of_workingdays(self.start_date,
-                                                              self.end_date)
-        if arguments.components:
+        if arguments.components and len(sys.argv) == 3\
+        and len(arguments.components) == 1:
             self.components = arguments.components
+            section = self.config[COMPONENTS[self.components[0]]]
+            self.start_date = section['start'] if section['start'] else \
+                              self.error_exit('start date', '-s')
+            self.end_date = section['end'] if section['end'] else \
+                            self.error_exit('end date', '-e')
+            JiraEffortsCLT.jiraserver = section['server'] if section['server'] else\
+                              self.error_exit('jira server', '-j')
+            JiraEffortsCLT.username = section['user'] if section['user'] else\
+                                      self.error_exit('username', '-u')
+            JiraEffortsCLT.password = section['pass']
 
-        JiraEffortsCLT.username = arguments.username
+        elif len(sys.argv) == 1:
+            section = self.config['DEFAULT']
+            self.start_date = section['start-date'] if section['start-date'] else \
+                              self.error_exit('start date', '-s')
+            self.end_date = section['end-date'] if section['end-date'] else \
+                            self.error_exit('end date', '-e')
+            JiraEffortsCLT.jiraserver = section['jira-server'] if section['jira-server'] else\
+                              self.error_exit('jira server', '-j')
+            JiraEffortsCLT.username = section['username'] if section['username'] else\
+                                      self.error_exit('username', '-u')
+            JiraEffortsCLT.password = section['password']
 
-        if not arguments.username:
-            JiraEffortsCLT.username = raw_input("Username: ")
-        JiraEffortsCLT.password = getpass("Password(%s): " % JiraEffortsCLT.username)
+        else:
+            if arguments.jiraserver:
+                JiraEffortsCLT.jiraserver = arguments.jiraserver
+            elif self.config['DEFAULT']['jira-server']:
+                JiraEffortsCLT.jiraserver = self.config['DEFAULT']['jira-server']
+            else:
+                self.error_exit('jira-server', '-j')
+            if arguments.start_date and arguments.end_date:
+                self.start_date = arguments.start_date[0]
+                self.end_date = arguments.end_date[0]
+            else:
+                self.start_date = self.config['DEFAULT']['start-date']
+                self.end_date = self.config['DEFAULT']['end-date']
+                print("Using default start and end dates:")
+            if not self.start_date:
+                self.error_exit('start-date', '-s')
+            if not self.end_date:
+                self.error_exit('end-date', '-e')
+            if arguments.components:
+                self.components = arguments.components
+            if arguments.username:
+                JiraEffortsCLT.username = arguments.username
+            else:
+                JiraEffortsCLT.username = self.config['DEFAULT']['username']
+            if not JiraEffortsCLT.username:
+                JiraEffortsCLT.username = raw_input("Username: ")
+                self.config['DEFAULT']['username'] = JiraEffortsCLT.username
+
+        start_date_obj = dt.datetime.strptime(self.start_date,
+                                                  '%Y/%m/%d').date()
+        end_date_obj = dt.datetime.strptime(self.end_date,
+                                                '%Y/%m/%d').date()
+        if start_date_obj >= end_date_obj:
+            print ("start date cannot be equal to or small than end date!")
+            exit(1)
+        if start_date_obj > dt.date.today():
+            print("start date is bigger than today. Cannot use future start date!")
+            exit(1)
+
+        secs_in_time_period = (networkdays(start_date_obj,
+                                           end_date_obj) - 1) * 8 * 60 * 60
+
+        if not self.config['DEFAULT']['password']:
+            JiraEffortsCLT.password = getpass("Password(%s): " % 
+                                                  JiraEffortsCLT.username)
+            self.config['DEFAULT']['password'] = JiraEffortsCLT.password
+
+        if not JiraEffortsCLT.password:
+            JiraEffortsCLT.password = self.config['DEFAULT']['password']
 
         try:
-            JiraEffortsCLT.jira = JIRA(options={'server': arguments.jiraserver,
-                                                'verify': False},
+            JiraEffortsCLT.jira = JIRA(options={'server': JiraEffortsCLT.jiraserver,
+                                                'verify': True},
                                        basic_auth=(JiraEffortsCLT.username,
-                                                   JiraEffortsCLT.password))
-        except JiraEffortsCLTException as e:
-            print ("Login Error: %s" % e)
+                                                   JiraEffortsCLT.password),
+                                       validate=True)
+        except JIRAError as e:
+            print ("Login Error! Username or password is invalid")
             exit(1)
 
         worklogs_jql = 'issue IN workLoggedBetween("%s","%s")' % (self.start_date,
                                                                   self.end_date)
         try:
-            dot_printer = ProgressBarDotPrinter(JiraEffortsCLT.dot_interval)
-            dot_printer.start()
             issues = set(JiraEffortsCLT.jira.search_issues(worklogs_jql,
                                                            maxResults=500))
             if len(issues) == 0:
@@ -358,6 +464,9 @@ class JiraEffortsCLT(JcltBase):
 
             issues -= self.pmo
             issue_parents_list = self._get_issue_hierarchy(issues)
+            if not set(self.components) & self.retrieved_components:
+                print("Found no worklogs for specified components in this period!")
+                exit(1)
 
             for item in issue_parents_list:
                 #issues keys are tuples in form of (issue key, issue type)
@@ -368,7 +477,7 @@ class JiraEffortsCLT(JcltBase):
                 # e.g.('TCWG-11','Roadmap Card')
                 rme_tuple = parents_list[0]
                 rmc_tuple = parents_list[1]
-                components_set = set(component.lower() for component in parents_list[2])
+                components_set = set(component for component in parents_list[2])
                 if self.components:
                     if not components_set & set(self.components):
                         continue
@@ -411,5 +520,9 @@ class JiraEffortsCLT(JcltBase):
             if self.efforts_dict:
                 self._write_to_csv_file()
 
-        finally:
-            dot_printer.stop()
+
+def open_config_for_editing():
+        if sys.platform == 'linux' or sys.platform == 'linux2' or sys.platform == 'darwin':
+                cmd = os.environ.get('EDITOR', 'vi') + " " + CONFIG_FILE
+                #TODO: add elif for windows
+        subprocess.check_call(cmd, shell=True)

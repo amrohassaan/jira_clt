@@ -6,7 +6,9 @@ import sys
 import argparse
 import logging
 import jira_clt.logger
+import os
 from jira_clt import jira_clt_efforts
+from jira_clt_efforts import CONFIG_FILE, open_config_for_editing
 
 
 def main():
@@ -18,10 +20,10 @@ def main():
                         dest='verbose', default=False,
                         help='Turn verbosity on for debugging.')
 
-    jira_clt_efforts.JiraEffortsCLT(parser)
-    if len(sys.argv) == 1:
-        parser.print_help()
-        sys.exit(1)
+    jira_clt_efforts.JiraEffortsCLT(parser)    
+#         parser.add_argument('--default', help=argparse.SUPPRESS)
+#         parser.print_help()
+#         sys.exit(1)
 
     arguments = parser.parse_args()
     jira_clt.logger.enable_console_logging(logging.WARN)
