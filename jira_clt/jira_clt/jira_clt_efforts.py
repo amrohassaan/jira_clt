@@ -102,7 +102,7 @@ NEXT_RELEASE_MONTH = FRIDAY_AFTER_RELEASE + relativedelta(months=+1)
 NEXT_RELEASE_DATE = getlastday(NEXT_RELEASE_MONTH.year,
                                NEXT_RELEASE_MONTH.month,
                                calendar.THURSDAY)
-CONFIG_FILE = os.path.expanduser('~') + '/.effortsrc'
+CONFIG_FILE = os.path.expanduser('~') + '/.efforts.ini'
 CONF_INITIALIZER = OrderedDict([('DEFAULT',
                                  OrderedDict([('jira-server',
                                                'https://cards.linaro.org'),
@@ -124,7 +124,7 @@ class JiraEffortsCLT(JcltBase):
     '''
     usage_description = "Extracts time spent per engineer on issues over arbitrary period of time.\n\n" +\
                         "=============================================================================================\n" +\
-                        "||+ 'efforts' accepts command line arg and values from config file '~/.effortsrc'.         ||\n"+\
+                        "||+ 'efforts' accepts command line arg and values from config file '~/.efforts.ini'        ||\n"+\
                         "||+ Command line args override config file values.                                         ||\n"+\
                         "||+ On first run, it creates the config file in user homedir and opens it to user          ||\n"+\
                         "||   to fill it.                                                                           ||\n"+\
