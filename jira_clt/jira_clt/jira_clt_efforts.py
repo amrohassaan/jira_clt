@@ -150,7 +150,9 @@ class JiraEffortsCLT(JcltBase):
                         "Example-6 (collect efforts for multiple comma-separated components from start to end date (args override config)):\n"+\
                         "\t effort -j 'https://cards.linaro.org' -s 2014.6.1 -e 2014.7.1 -m lab,sys,lava,lng\n\n"+\
                         "Example-7 (opens config for editing):\n"+\
-                        "\t effort config"
+                        "\t effort config\n\n" +\
+                        "Example-8 (updates start and end dates in the config DEFAULT section to current month release cycle):\n"+\
+                        "\t effort uprel"
     jiraserver = None
     password = None
     username = None
@@ -161,6 +163,19 @@ class JiraEffortsCLT(JcltBase):
         if len(sys.argv) > 1 and sys.argv[1].lower() == "config":
             if os.path.isfile(CONFIG_FILE):
                 open_config_for_editing()
+                exit(0)
+        if len(sys.argv) > 1 and sys.argv[1].lower() == "uprel":
+            if os.path.isfile(CONFIG_FILE):
+                self.config = ConfigObj(CONFIG_FILE)
+                default_section = self.config['DEFAULT']
+                default_section['start-date'] = FRIDAY_AFTER_RELEASE.strftime('%Y/%m/%d')
+                default_section['end-date'] = NEXT_RELEASE_DATE.strftime('%Y/%m/%d')
+                self.config.write()
+                print('Config: default start and end dates updated to current release cycle successfully.')
+                exit(0)
+            else:
+                print("Config file has never been created.\n"
+                      "Type 'efforts' to have it created in your home directory.")
                 exit(0)
         if not os.path.isfile(CONFIG_FILE):
             self.config = ConfigObj(CONF_INITIALIZER, write_empty_values=True)
@@ -177,7 +192,7 @@ class JiraEffortsCLT(JcltBase):
             self.config.initial_comment.append('Also fill in the start and end dates'
                                                'for the component(s) you want to extract efforts for')
             self.config.write()
-            open_config_for_editing()        
+            open_config_for_editing()
         self.config = ConfigObj(CONFIG_FILE)
         self.logger = logging.getLogger('jira_clt.efforts')
         self.orphan_issues = set()
