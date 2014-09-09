@@ -1,6 +1,7 @@
 from distutils.core import setup
 from setuptools import find_packages
 
+
 setup(
     name='jira_clt',
     author='Linaro.org',

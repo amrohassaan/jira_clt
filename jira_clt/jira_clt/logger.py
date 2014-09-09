@@ -1,6 +1,6 @@
 ## @package jira_clt.logger
 #
-# Setting up the logger
+# Setting up the logger.
 
 import os
 import logging.handlers
