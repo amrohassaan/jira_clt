@@ -7,6 +7,7 @@ setup(
     author='Linaro.org',
     author_email='amro.hassaan@linaro.org',
     url='https://github.com/amrohassaan/jira_clt',
+    download_url='https://github.com/amrohassaan/jira_clt/tarball/1.2',
     version='1.2',
     description="Linaro JIRA Command line tools",
     entry_points={
