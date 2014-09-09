@@ -1,6 +1,6 @@
 ##@package jira_clt
 #
-# Extracts jira efforts.
+# Extracts jira efforts
 
 from __future__ import division
 from __future__ import print_function
