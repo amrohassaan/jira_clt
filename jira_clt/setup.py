@@ -6,6 +6,7 @@ setup(
     name='jira_clt',
     author='Linaro.org',
     author_email='amro.hassaan@linaro.org',
+    url='https://github.com/amrohassaan/jira_clt',
     version='1.2',
     description="Linaro JIRA Command line tools",
     entry_points={
