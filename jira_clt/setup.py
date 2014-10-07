@@ -14,7 +14,7 @@ setup(
         'console_scripts': [
             'efforts=jira_clt.efforts:main']
     },
-    install_requires=['jira==0.32', 'pycrypto==2.6.1', 'jira-python==0.31',
+    install_requires=['jira==0.32', 'pycrypto==2.6.1', 'jira-python==0.16',
                       'workdays==1.3', 'configobj==5.0', 'python-dateutil==1.5'],
     packages=find_packages(),
     include_package_data=True
