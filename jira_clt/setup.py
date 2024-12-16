@@ -15,7 +15,7 @@ setup(
             'efforts=jira_clt.efforts:main']
     },
     install_requires=['pycrypto==2.6.1', 'jira-python==0.16',
-                      'workdays==1.3', 'configobj==5.0', 'python-dateutil==1.5'],
+                      'workdays==1.3', 'configobj==5.0.9', 'python-dateutil==1.5'],
     packages=find_packages(),
     include_package_data=True
 )
